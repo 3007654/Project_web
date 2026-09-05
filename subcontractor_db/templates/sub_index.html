@@ -1,0 +1,45 @@
+{% extends "sub_base.html" %}
+{% block title %}All Subcontractors{% endblock %}
+{% block content %}
+  <h1>Pilot Subcontractors</h1>
+  <div class="disclaimer">{{ disclaimer }}</div>
+
+  {% if not rows %}
+    <div class="card empty">No subcontractors yet. <a href="{{ url_for('add') }}">Add the first one</a>.</div>
+  {% else %}
+    {% for item in rows %}
+      {% set p = item.profile %}
+      <div class="card">
+        <div class="row">
+          <div>
+            <a href="{{ url_for('profile', sub_id=p.id) }}"><strong>{{ p.company_name }}</strong></a>
+            <div class="meta">{{ p.trade }} &middot; {{ p.province }} &middot; {{ p.years_active }} yr(s) active</div>
+            <div class="meta">
+              CIPC:
+              {% if item.cipc and item.cipc.verified %}
+                <span class="check-ok">verified &mdash; checked {{ item.cipc.checked_date }}</span>
+              {% elif item.cipc %}
+                <span class="check-fail">checked {{ item.cipc.checked_date }} &mdash; not verified</span>
+              {% else %}
+                <span class="check-none">not checked</span>
+              {% endif %}
+              &middot;
+              CIDB:
+              {% if item.cidb and item.cidb.verified %}
+                <span class="check-ok">verified (Grade {{ item.cidb.grade }}) &mdash; checked {{ item.cidb.checked_date }}</span>
+              {% elif item.cidb %}
+                <span class="check-fail">checked {{ item.cidb.checked_date }} &mdash; not verified</span>
+              {% else %}
+                <span class="check-none">not checked</span>
+              {% endif %}
+            </div>
+          </div>
+          <div>
+            <span class="badge badge-{{ p.verification_tier }}">{{ p.verification_tier }}</span>
+            <span class="score">{{ p.verification_score }}/100</span>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endblock %}

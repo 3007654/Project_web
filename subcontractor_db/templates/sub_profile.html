@@ -1,0 +1,114 @@
+{% extends "sub_base.html" %}
+{% block title %}{{ p.company_name }}{% endblock %}
+{% block content %}
+  <p><a href="{{ url_for('index') }}">&larr; All profiles</a></p>
+
+  <div class="disclaimer">{{ disclaimer }}</div>
+
+  {% if errors %}
+    <div class="errors">
+      <strong>Please fix the following:</strong>
+      <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+    </div>
+  {% endif %}
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <h1 style="margin-bottom:2px;">{{ p.company_name }}</h1>
+        <div class="meta">{{ p.trade }} &middot; {{ p.province }} &middot; {{ p.years_active }} yr(s) active &middot; ID SC-{{ '%04d'|format(p.id) }}</div>
+      </div>
+      <div>
+        <span class="badge badge-{{ p.verification_tier }}">{{ p.verification_tier }}</span>
+        <span class="score">{{ p.verification_score }}/100</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Contact</h3>
+    <p>{{ p.contact_name }}<br>{{ p.phone }}<br>{{ p.email }}</p>
+  </div>
+
+  <div class="card">
+    <h3>Verification history</h3>
+    {% if records %}
+      <table>
+        <tr><th>Check</th><th>Outcome</th><th>Grade</th><th>Checked date</th><th>Checked by</th></tr>
+        {% for r in records %}
+          <tr>
+            <td>{{ r.check_type }}</td>
+            <td>{% if r.verified %}<span class="check-ok">Verified</span>{% else %}<span class="check-fail">Not verified</span>{% endif %}</td>
+            <td>{{ r.grade or '—' }}</td>
+            <td>{{ r.checked_date }}</td>
+            <td>{{ r.checked_by }}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="meta">No checks recorded yet.</p>
+    {% endif %}
+
+    <fieldset style="margin-top:18px;">
+      <legend>Record a check</legend>
+      <form method="post" action="{{ url_for('record_check', sub_id=p.id) }}">
+        <label for="check_type">Check type</label>
+        <select id="check_type" name="check_type">
+          <option value="">Select&hellip;</option>
+          {% for ct in check_types %}
+            <option value="{{ ct }}" {% if form.get('check_type') == ct %}selected{% endif %}>{{ ct }}</option>
+          {% endfor %}
+        </select>
+
+        <label for="outcome">Outcome</label>
+        <select id="outcome" name="outcome">
+          <option value="">Select&hellip;</option>
+          <option value="verified" {% if form.get('outcome') == 'verified' %}selected{% endif %}>Verified &mdash; matched the source</option>
+          <option value="not_verified" {% if form.get('outcome') == 'not_verified' %}selected{% endif %}>Not verified &mdash; did not match / could not confirm</option>
+        </select>
+
+        <label for="grade">CIDB grade (only if check type is CIDB and outcome is verified)</label>
+        <select id="grade" name="grade">
+          <option value="">N/A</option>
+          {% for g in grades %}
+            <option value="{{ g }}" {% if form.get('grade')|string == g|string %}selected{% endif %}>Grade {{ g }}</option>
+          {% endfor %}
+        </select>
+
+        <label for="checked_date">Date checked</label>
+        <input type="date" id="checked_date" name="checked_date" max="{{ today }}" value="{{ form.get('checked_date', '') }}">
+
+        <label for="checked_by">Checked by</label>
+        <input type="text" id="checked_by" name="checked_by" placeholder="Name of the person who did the check" value="{{ form.get('checked_by', '') }}">
+
+        <button class="btn btn-secondary" type="submit">Record check</button>
+      </form>
+    </fieldset>
+  </div>
+
+  <div class="card">
+    <h3>Site references</h3>
+    {% if references %}
+      <div class="refs">
+        {% for ref in references %}
+          <div class="ref"><strong>{{ ref.client_name }}</strong><br>{{ ref.comment }}</div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="meta">No references on file yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Audit trail</h3>
+    {% if events %}
+      <ul class="audit-list">
+        {% for e in events %}
+          <li><span class="audit-time">{{ e.created_at[0:10] }} {{ e.created_at[11:16] }}</span>{{ e.description }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="meta">No events recorded yet.</p>
+    {% endif %}
+  </div>
+{% endblock %}

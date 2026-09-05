@@ -1,0 +1,98 @@
+{% extends "sub_base.html" %}
+{% block title %}Add Subcontractor{% endblock %}
+{% block content %}
+  <h1>Add Subcontractor</h1>
+  <p class="meta">
+    CIPC and CIDB have no free, queryable API at pilot scale, so these are checked by hand
+    against the official portals first. Only tick a box below if that check has already
+    been done — record who did it and when. Leave both unticked if onboarding is starting
+    before verification; you can add a check later from the profile page.
+  </p>
+
+  {% if errors %}
+    <div class="errors">
+      <strong>Please fix the following:</strong>
+      <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+    </div>
+  {% endif %}
+
+  <form method="post" novalidate>
+    <fieldset>
+      <legend>Company &amp; Contact</legend>
+
+      <label for="company_name">Company name</label>
+      <input type="text" id="company_name" name="company_name" value="{{ form.get('company_name', '') }}">
+
+      <label for="contact_name">Contact name</label>
+      <input type="text" id="contact_name" name="contact_name" value="{{ form.get('contact_name', '') }}">
+
+      <label for="phone">Phone</label>
+      <input type="text" id="phone" name="phone" value="{{ form.get('phone', '') }}">
+
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" value="{{ form.get('email', '') }}">
+
+      <label for="trade">Trade</label>
+      <select id="trade" name="trade">
+        <option value="">Select a trade&hellip;</option>
+        {% for t in trades %}
+          <option value="{{ t }}" {% if form.get('trade') == t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="province">Province</label>
+      <select id="province" name="province">
+        <option value="">Select a province&hellip;</option>
+        {% for p in provinces %}
+          <option value="{{ p }}" {% if form.get('province') == p %}selected{% endif %}>{{ p }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="years_active">Years active</label>
+      <input type="number" id="years_active" name="years_active" min="0" max="100" value="{{ form.get('years_active', '') }}">
+    </fieldset>
+
+    <fieldset>
+      <legend>CIPC check (optional at onboarding)</legend>
+      <div class="checkbox-row">
+        <input type="checkbox" id="cipc_verified" name="cipc_verified" {% if form.get('cipc_verified') == 'on' %}checked{% endif %}>
+        <label for="cipc_verified">Already checked against CIPC and it came back verified</label>
+      </div>
+      <label for="cipc_checked_date">Date checked</label>
+      <input type="date" id="cipc_checked_date" name="cipc_checked_date" max="{{ today }}" value="{{ form.get('cipc_checked_date', '') }}">
+      <label for="cipc_checked_by">Checked by</label>
+      <input type="text" id="cipc_checked_by" name="cipc_checked_by" placeholder="Name of the person who did the check" value="{{ form.get('cipc_checked_by', '') }}">
+    </fieldset>
+
+    <fieldset>
+      <legend>CIDB check (optional at onboarding)</legend>
+      <div class="checkbox-row">
+        <input type="checkbox" id="cidb_verified" name="cidb_verified" {% if form.get('cidb_verified') == 'on' %}checked{% endif %}>
+        <label for="cidb_verified">Already checked against the CIDB register and it came back verified</label>
+      </div>
+      <label for="cidb_grade">CIDB grade</label>
+      <select id="cidb_grade" name="cidb_grade">
+        <option value="">Select a grade&hellip;</option>
+        {% for g in grades %}
+          <option value="{{ g }}" {% if form.get('cidb_grade')|string == g|string %}selected{% endif %}>Grade {{ g }}</option>
+        {% endfor %}
+      </select>
+      <label for="cidb_checked_date">Date checked</label>
+      <input type="date" id="cidb_checked_date" name="cidb_checked_date" max="{{ today }}" value="{{ form.get('cidb_checked_date', '') }}">
+      <label for="cidb_checked_by">Checked by</label>
+      <input type="text" id="cidb_checked_by" name="cidb_checked_by" placeholder="Name of the person who did the check" value="{{ form.get('cidb_checked_by', '') }}">
+    </fieldset>
+
+    <fieldset>
+      <legend>Site References (optional, up to 3)</legend>
+      {% for i in (1, 2, 3) %}
+        <label for="ref{{ i }}_client">Reference {{ i }} &mdash; client name</label>
+        <input type="text" id="ref{{ i }}_client" name="ref{{ i }}_client" value="{{ form.get('ref' ~ i ~ '_client', '') }}">
+        <label for="ref{{ i }}_comment">Reference {{ i }} &mdash; comment</label>
+        <textarea id="ref{{ i }}_comment" name="ref{{ i }}_comment" rows="2">{{ form.get('ref' ~ i ~ '_comment', '') }}</textarea>
+      {% endfor %}
+    </fieldset>
+
+    <button class="btn" type="submit">Save Subcontractor</button>
+  </form>
+{% endblock %}
