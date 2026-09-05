@@ -2,3 +2,6 @@ __pycache__/
 *.py[cod]
 matched_tenders.json
 matched_tenders.csv
+matched_tenders_grouped.json
+request_form/direct_requests.json
+request_form/direct_requests.csv

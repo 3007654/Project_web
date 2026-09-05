@@ -42,6 +42,7 @@ what's expected. Before relying on this for the pilot:
 import csv
 import json
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 
@@ -83,6 +84,15 @@ def _fetch_single_day(day_str: str, max_retries: int = 3) -> list[dict]:
             except requests.exceptions.ReadTimeout:
                 if attempt == max_retries:
                     raise
+                time.sleep(1.5 * attempt)
+            except requests.exceptions.HTTPError as exc:
+                status = exc.response.status_code if exc.response is not None else None
+                # Retry server-side errors (transient) - not client errors
+                # (4xx means our request itself is wrong, retrying won't help).
+                if status and 500 <= status < 600 and attempt < max_retries:
+                    time.sleep(1.5 * attempt)
+                    continue
+                raise
 
         payload = resp.json()
         page_releases = payload.get("releases") if isinstance(payload, dict) else None
@@ -127,8 +137,8 @@ def fetch_from_release_api(date_from: str, date_to: str) -> list[dict]:
                 day_releases = future.result()
                 print(f"  {day_str}: {len(day_releases)} release(s)")
                 all_releases.extend(day_releases)
-            except requests.exceptions.ReadTimeout:
-                print(f"  {day_str}: gave up after retries, skipping this day", file=sys.stderr)
+            except requests.exceptions.RequestException as exc:
+                print(f"  {day_str}: gave up after retries ({exc}), skipping this day", file=sys.stderr)
 
     return all_releases
 
@@ -282,17 +292,85 @@ def normalise_releases(raw_releases: list[dict]) -> list[dict]:
     return [extract_summary(r) for r in matched]
 
 
+def _sort_key(row: dict) -> str:
+    """Most recent first. Prefer award_date, fall back to the release date;
+    empty string sorts last."""
+    return row.get("award_date") or row.get("source_release_date") or ""
+
+
+def group_by_province_and_industry(rows: list[dict]) -> dict:
+    """
+    Nests matched tenders as {province: {industry: [rows...]}}, each list
+    sorted most-recent-first. A tender with multiple industry tags appears
+    under each of its industries (it's still one real tender - this is a
+    view for browsing, not a partition).
+    """
+    grouped: dict[str, dict[str, list[dict]]] = {}
+
+    for row in rows:
+        province = row.get("province") or "(unspecified)"
+        industries = row.get("industries") or ["(unspecified)"]
+
+        for industry in industries:
+            grouped.setdefault(province, {}).setdefault(industry, []).append(row)
+
+    for province_groups in grouped.values():
+        for industry_rows in province_groups.values():
+            industry_rows.sort(key=_sort_key, reverse=True)
+
+    return grouped
+
+
+def print_summary_table(rows: list[dict]) -> None:
+    """Quick counts so the shape of the data is visible without opening a file."""
+    if not rows:
+        print("No matched tenders to summarise.")
+        return
+
+    by_province: dict[str, int] = {}
+    by_industry: dict[str, int] = {}
+    for row in rows:
+        province = row.get("province") or "(unspecified)"
+        by_province[province] = by_province.get(province, 0) + 1
+        for industry in row.get("industries") or ["(unspecified)"]:
+            by_industry[industry] = by_industry.get(industry, 0) + 1
+
+    print(f"\n--- Summary: {len(rows)} matched tender(s) ---")
+    print("\nBy province:")
+    for province, count in sorted(by_province.items(), key=lambda kv: -kv[1]):
+        print(f"  {province}: {count}")
+
+    print("\nBy industry:")
+    for industry, count in sorted(by_industry.items(), key=lambda kv: -kv[1]):
+        print(f"  {industry}: {count}")
+
+
 def write_outputs(rows: list[dict]) -> None:
+    # Flat outputs, sorted most-recent-first, for spreadsheet use / feeding
+    # straight into the matching engine.
+    rows_sorted = sorted(rows, key=_sort_key, reverse=True)
+
     with open(config.OUTPUT_JSON, "w", encoding="utf-8") as f:
-        json.dump(rows, f, indent=2, ensure_ascii=False)
+        json.dump(rows_sorted, f, indent=2, ensure_ascii=False)
 
-    if rows:
+    if rows_sorted:
         with open(config.OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+            writer = csv.DictWriter(f, fieldnames=list(rows_sorted[0].keys()))
             writer.writeheader()
-            writer.writerows(rows)
+            writer.writerows(rows_sorted)
 
-    print(f"Wrote {len(rows)} matched tender(s) to {config.OUTPUT_JSON} / {config.OUTPUT_CSV}")
+    # Grouped view: province -> industry -> tenders, for browsing rather
+    # than spreadsheet processing.
+    grouped = group_by_province_and_industry(rows)
+    with open(config.OUTPUT_GROUPED_JSON, "w", encoding="utf-8") as f:
+        json.dump(grouped, f, indent=2, ensure_ascii=False)
+
+    print(
+        f"Wrote {len(rows_sorted)} matched tender(s) to "
+        f"{config.OUTPUT_JSON} / {config.OUTPUT_CSV} (flat, sorted by date) "
+        f"and {config.OUTPUT_GROUPED_JSON} (grouped by province/industry)"
+    )
+    print_summary_table(rows_sorted)
 
 
 def diagnose(raw_releases: list[dict]) -> None:

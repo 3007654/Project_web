@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Request a subcontractor</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #f4f5f7; margin: 0; padding: 40px 16px; }
+  .card { max-width: 560px; margin: 0 auto; background: #fff; border-radius: 10px; padding: 32px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  h1 { font-size: 22px; margin: 0 0 4px; color: #1a1a1a; }
+  .subtitle { color: #666; font-size: 14px; margin: 0 0 24px; }
+  label { display: block; font-size: 14px; font-weight: 600; margin: 16px 0 6px; color: #333; }
+  input, select, textarea { width: 100%; padding: 10px 12px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-family: inherit; }
+  textarea { min-height: 90px; resize: vertical; }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  button { margin-top: 24px; width: 100%; padding: 12px; font-size: 15px; font-weight: 600; background: #1d6f56; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+  button:hover { background: #165a45; }
+  .errors { background: #fdecea; border: 1px solid #f5c2c0; border-radius: 6px; padding: 12px 16px; margin-bottom: 16px; }
+  .errors ul { margin: 0; padding-left: 18px; color: #a33; font-size: 14px; }
+  .required { color: #a33; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Request a subcontractor</h1>
+    <p class="subtitle">Tell us what you need and we'll match you with verified subcontractors.</p>
+
+    {% if errors %}
+    <div class="errors">
+      <ul>
+        {% for error in errors %}
+        <li>{{ error }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/submit">
+      <div class="row">
+        <div>
+          <label>Company name <span class="required">*</span></label>
+          <input type="text" name="company_name" value="{{ form_data.get('company_name', '') }}" required>
+        </div>
+        <div>
+          <label>Contact person <span class="required">*</span></label>
+          <input type="text" name="contact_person" value="{{ form_data.get('contact_person', '') }}" required>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Contact phone <span class="required">*</span></label>
+          <input type="tel" name="contact_phone" placeholder="e.g. 082 123 4567" value="{{ form_data.get('contact_phone', '') }}" required>
+        </div>
+        <div>
+          <label>Contact email</label>
+          <input type="email" name="contact_email" value="{{ form_data.get('contact_email', '') }}">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Province <span class="required">*</span></label>
+          <select name="province" required>
+            <option value="" disabled {% if not form_data.get('province') %}selected{% endif %}>Select province</option>
+            {% for p in provinces %}
+            <option value="{{ p }}" {% if form_data.get('province') == p %}selected{% endif %}>{{ p }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Industry needed <span class="required">*</span></label>
+          <select name="industry" required>
+            <option value="" disabled {% if not form_data.get('industry') %}selected{% endif %}>Select industry</option>
+            {% for i in industries %}
+            <option value="{{ i }}" {% if form_data.get('industry') == i %}selected{% endif %}>{{ i }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <label>Project reference / tender number</label>
+      <input type="text" name="project_reference" placeholder="Optional" value="{{ form_data.get('project_reference', '') }}">
+
+      <label>What do you need? <span class="required">*</span></label>
+      <textarea name="description" placeholder="Describe the scope of work, e.g. 'Electrical reticulation for a 3-floor office block, approx. 2 months of work.'" required>{{ form_data.get('description', '') }}</textarea>
+
+      <label>Needed by</label>
+      <input type="date" name="needed_by" value="{{ form_data.get('needed_by', '') }}">
+
+      <button type="submit">Submit request</button>
+    </form>
+  </div>
+</body>
+</html>

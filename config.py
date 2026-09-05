@@ -125,6 +125,9 @@ STANDING_OFFER_TERMS = [
 # (the matching/vetting engine and the WhatsApp/Telegram push in Phase 3).
 OUTPUT_JSON = "matched_tenders.json"
 OUTPUT_CSV = "matched_tenders.csv"
+# Same data, nested as {province: {industry: [tenders...]}} for browsing
+# rather than spreadsheet processing - see group_by_province_and_industry().
+OUTPUT_GROUPED_JSON = "matched_tenders_grouped.json"
 
 REQUEST_TIMEOUT_SECONDS = 60
 
