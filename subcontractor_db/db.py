@@ -98,8 +98,69 @@ def connect(db_path):
 def init_db(db_path):
     conn = connect(db_path)
     conn.executescript(SCHEMA)
+    _migrate_existing_schema(conn)
     conn.commit()
     conn.close()
+
+
+def _migrate_existing_schema(conn):
+    """Add fields introduced after the first subcontractor schema release."""
+    profile_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(subcontractor_profiles)")
+    }
+    if "profile_status" not in profile_columns:
+        conn.execute(
+            "ALTER TABLE subcontractor_profiles ADD COLUMN "
+            "profile_status TEXT NOT NULL DEFAULT 'pending'"
+        )
+
+    record_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(verification_records)")
+    }
+    additions = {
+        "outcome": "TEXT NOT NULL DEFAULT 'not_verified'",
+        "reference_number": "TEXT",
+        "source": "TEXT NOT NULL DEFAULT 'Legacy record'",
+        "notes": "TEXT",
+        "verified_by_user_id": "INTEGER",
+    }
+    for column, definition in additions.items():
+        if column not in record_columns:
+            conn.execute(
+                f"ALTER TABLE verification_records ADD COLUMN {column} {definition}"
+            )
+
+    legacy_user = conn.execute(
+        "SELECT id FROM verifier_users WHERE email = ?",
+        ("legacy-import@local.invalid",),
+    ).fetchone()
+    if legacy_user is None:
+        cursor = conn.execute(
+            "INSERT INTO verifier_users "
+            "(name, email, password_hash, role, active, created_at) "
+            "VALUES (?, ?, ?, 'VERIFIER', 0, ?)",
+            (
+                "Legacy import",
+                "legacy-import@local.invalid",
+                "!legacy-import-not-a-login",
+                now_iso(),
+            ),
+        )
+        legacy_user_id = cursor.lastrowid
+    else:
+        legacy_user_id = legacy_user[0]
+
+    if "verified" in record_columns:
+        conn.execute(
+            "UPDATE verification_records SET outcome = CASE "
+            "WHEN verified = 1 THEN 'verified' ELSE 'not_verified' END "
+            "WHERE outcome = 'not_verified'"
+        )
+    conn.execute(
+        "UPDATE verification_records SET verified_by_user_id = ? "
+        "WHERE verified_by_user_id IS NULL",
+        (legacy_user_id,),
+    )
 
 
 def now_iso():
