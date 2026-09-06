@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}All Subcontractors{% endblock %}
+{% block content %}
+  <h1>Pilot Subcontractors</h1>
+  <div class="disclaimer">{{ disclaimer }}</div>
+
+  {% if not rows %}
+    <div class="card empty">No subcontractors yet. <a href="{{ url_for('add') }}">Add the first one</a>.</div>
+  {% else %}
+    {% for item in rows %}
+      {% set p = item.profile %}
+      <div class="card">
+        <div class="row">
+          <div>
+            <a href="{{ url_for('profile', sub_id=p.id) }}"><strong>{{ p.company_name }}</strong></a>
+            <div class="meta">{{ p.trade }} &middot; {{ p.province }} &middot; {{ p.years_active }} yr(s) active</div>
+            <div class="meta">
+              CIPC:
+              {% if item.cipc and item.cipc.outcome == 'verified' %}
+                <span class="check-ok">verified &mdash; checked {{ item.cipc.checked_date }} by {{ item.cipc.verifier_name }}</span>
+              {% elif item.cipc and item.cipc.outcome == 'needs_review' %}
+                <span class="check-fail">needs review &mdash; checked {{ item.cipc.checked_date }} by {{ item.cipc.verifier_name }}</span>
+              {% elif item.cipc %}
+                <span class="check-fail">not verified &mdash; checked {{ item.cipc.checked_date }} by {{ item.cipc.verifier_name }}</span>
+              {% else %}
+                <span class="check-none">not checked</span>
+              {% endif %}
+              &middot;
+              CIDB:
+              {% if item.cidb and item.cidb.outcome == 'verified' %}
+                <span class="check-ok">verified (Grade {{ item.cidb.grade }}) &mdash; checked {{ item.cidb.checked_date }} by {{ item.cidb.verifier_name }}</span>
+              {% elif item.cidb and item.cidb.outcome == 'needs_review' %}
+                <span class="check-fail">needs review &mdash; checked {{ item.cidb.checked_date }} by {{ item.cidb.verifier_name }}</span>
+              {% elif item.cidb %}
+                <span class="check-fail">not verified &mdash; checked {{ item.cidb.checked_date }} by {{ item.cidb.verifier_name }}</span>
+              {% else %}
+                <span class="check-none">not checked</span>
+              {% endif %}
+            </div>
+          </div>
+          <div>
+            <span class="badge status-{{ p.profile_status }}">{% if p.profile_status == 'pending' %}Verification Pending{% elif p.profile_status == 'not_verified' %}Not Verified{% elif p.profile_status == 'needs_review' %}Needs Review{% else %}Verified{% endif %}</span><br>
+            <span class="badge badge-{{ p.verification_tier }}" style="margin-top:4px;display:inline-block;">{{ p.verification_tier }}</span>
+            <span class="score">{{ p.verification_score }}/100</span>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endblock %}

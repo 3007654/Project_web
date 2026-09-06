@@ -19,6 +19,19 @@ import sqlite3
 from datetime import datetime, timezone
 
 SCHEMA = """
+-- Authorised verifiers. Only someone with a row here (and the right
+-- password) can ever record a verification check - a subcontractor
+-- submitting their own profile has no way to mark themselves verified.
+CREATE TABLE IF NOT EXISTS verifier_users (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    name                TEXT NOT NULL,
+    email               TEXT NOT NULL UNIQUE,
+    password_hash       TEXT NOT NULL,
+    role                TEXT NOT NULL DEFAULT 'VERIFIER',  -- 'ADMIN' or 'VERIFIER'
+    active              INTEGER NOT NULL DEFAULT 1,
+    created_at          TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS subcontractor_profiles (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     company_name        TEXT NOT NULL,
@@ -31,6 +44,13 @@ CREATE TABLE IF NOT EXISTS subcontractor_profiles (
     tier                TEXT NOT NULL DEFAULT 'free',
     verification_score  INTEGER NOT NULL DEFAULT 0,
     verification_tier   TEXT NOT NULL DEFAULT 'Unverified',
+    -- Workflow status, separate from the score/tier above:
+    -- 'pending'      - submitted, no check has been performed yet
+    -- 'verified'     - at least one check on file, none needing review,
+    --                  not all of them lapsed/failed
+    -- 'not_verified' - every check on file came back negative
+    -- 'needs_review' - the latest of some check came back ambiguous
+    profile_status      TEXT NOT NULL DEFAULT 'pending',
     created_at          TEXT NOT NULL
 );
 
@@ -40,10 +60,13 @@ CREATE TABLE IF NOT EXISTS verification_records (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     subcontractor_id    INTEGER NOT NULL REFERENCES subcontractor_profiles(id),
     check_type          TEXT NOT NULL,   -- 'CIPC', 'CIDB', or a future check
-    verified            INTEGER NOT NULL, -- 1 = matched the source on the date checked
+    outcome             TEXT NOT NULL,   -- 'verified' | 'not_verified' | 'needs_review'
+    reference_number    TEXT,             -- CIPC registration number / CIDB CRS number
     grade               INTEGER,          -- CIDB grade 1-9; NULL for other check types
+    source              TEXT NOT NULL,    -- e.g. "CIPC eServices portal"
+    notes               TEXT,             -- what the verifier actually observed
     checked_date        TEXT NOT NULL,
-    checked_by          TEXT NOT NULL,    -- who performed the manual check
+    verified_by_user_id INTEGER NOT NULL REFERENCES verifier_users(id),
     created_at          TEXT NOT NULL
 );
 

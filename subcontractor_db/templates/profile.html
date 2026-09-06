@@ -1,4 +1,4 @@
-{% extends "sub_base.html" %}
+{% extends "base.html" %}
 {% block title %}{{ p.company_name }}{% endblock %}
 {% block content %}
   <p><a href="{{ url_for('index') }}">&larr; All profiles</a></p>
@@ -19,7 +19,8 @@
         <div class="meta">{{ p.trade }} &middot; {{ p.province }} &middot; {{ p.years_active }} yr(s) active &middot; ID SC-{{ '%04d'|format(p.id) }}</div>
       </div>
       <div>
-        <span class="badge badge-{{ p.verification_tier }}">{{ p.verification_tier }}</span>
+        <span class="badge status-{{ p.profile_status }}">{% if p.profile_status == 'pending' %}Verification Pending{% elif p.profile_status == 'not_verified' %}Not Verified{% elif p.profile_status == 'needs_review' %}Needs Review{% else %}Verified{% endif %}</span><br>
+        <span class="badge badge-{{ p.verification_tier }}" style="margin-top:4px;display:inline-block;">{{ p.verification_tier }}</span>
         <span class="score">{{ p.verification_score }}/100</span>
       </div>
     </div>
@@ -34,23 +35,31 @@
     <h3>Verification history</h3>
     {% if records %}
       <table>
-        <tr><th>Check</th><th>Outcome</th><th>Grade</th><th>Checked date</th><th>Checked by</th></tr>
+        <tr><th>Check</th><th>Outcome</th><th>Reference #</th><th>Grade</th><th>Source</th><th>Notes</th><th>Checked date</th><th>Verified by</th></tr>
         {% for r in records %}
           <tr>
             <td>{{ r.check_type }}</td>
-            <td>{% if r.verified %}<span class="check-ok">Verified</span>{% else %}<span class="check-fail">Not verified</span>{% endif %}</td>
+            <td>
+              {% if r.outcome == 'verified' %}<span class="check-ok">Verified</span>
+              {% elif r.outcome == 'needs_review' %}<span class="check-fail">Needs review</span>
+              {% else %}<span class="check-fail">Not verified</span>{% endif %}
+            </td>
+            <td>{{ r.reference_number or '—' }}</td>
             <td>{{ r.grade or '—' }}</td>
+            <td>{{ r.source }}</td>
+            <td>{{ r.notes or '—' }}</td>
             <td>{{ r.checked_date }}</td>
-            <td>{{ r.checked_by }}</td>
+            <td>{{ r.verifier_name }} ({{ r.verifier_role }})</td>
           </tr>
         {% endfor %}
       </table>
     {% else %}
-      <p class="meta">No checks recorded yet.</p>
+      <p class="meta">No checks recorded yet - this profile is awaiting verification.</p>
     {% endif %}
 
+    {% if is_logged_in %}
     <fieldset style="margin-top:18px;">
-      <legend>Record a check</legend>
+      <legend>Record a check &mdash; signed in as {{ verifier_name }}</legend>
       <form method="post" action="{{ url_for('record_check', sub_id=p.id) }}">
         <label for="check_type">Check type</label>
         <select id="check_type" name="check_type">
@@ -60,12 +69,26 @@
           {% endfor %}
         </select>
 
+        <label for="source">Source (state exactly what was checked against)</label>
+        <select id="source" name="source">
+          <option value="">Select&hellip;</option>
+          {% for ct, sources in sources_by_check_type.items() %}
+            {% for s in sources %}
+              <option value="{{ s }}" {% if form.get('source') == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          {% endfor %}
+        </select>
+
         <label for="outcome">Outcome</label>
         <select id="outcome" name="outcome">
           <option value="">Select&hellip;</option>
           <option value="verified" {% if form.get('outcome') == 'verified' %}selected{% endif %}>Verified &mdash; matched the source</option>
           <option value="not_verified" {% if form.get('outcome') == 'not_verified' %}selected{% endif %}>Not verified &mdash; did not match / could not confirm</option>
+          <option value="needs_review" {% if form.get('outcome') == 'needs_review' %}selected{% endif %}>Needs review &mdash; ambiguous, follow up required</option>
         </select>
+
+        <label for="reference_number">Reference number (CIPC registration # / CIDB CRS #)</label>
+        <input type="text" id="reference_number" name="reference_number" placeholder="Required if outcome is verified" value="{{ form.get('reference_number', '') }}">
 
         <label for="grade">CIDB grade (only if check type is CIDB and outcome is verified)</label>
         <select id="grade" name="grade">
@@ -78,12 +101,18 @@
         <label for="checked_date">Date checked</label>
         <input type="date" id="checked_date" name="checked_date" max="{{ today }}" value="{{ form.get('checked_date', '') }}">
 
-        <label for="checked_by">Checked by</label>
-        <input type="text" id="checked_by" name="checked_by" placeholder="Name of the person who did the check" value="{{ form.get('checked_by', '') }}">
+        <label for="notes">Notes (required unless outcome is a clean Verified)</label>
+        <textarea id="notes" name="notes" rows="2" placeholder="What did you actually see on the source?">{{ form.get('notes', '') }}</textarea>
 
         <button class="btn btn-secondary" type="submit">Record check</button>
       </form>
     </fieldset>
+    {% else %}
+    <div class="meta" style="margin-top:18px;">
+      <a href="{{ url_for('login', next=request.path) }}">Log in as a verifier</a> to record a check.
+      Subcontractors cannot verify themselves.
+    </div>
+    {% endif %}
   </div>
 
   <div class="card">
