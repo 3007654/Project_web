@@ -2,6 +2,8 @@
 Configuration for the Subcontractor Verification app (Phase 2, rebuilt).
 """
 
+import os
+
 PROVINCES = [
     "Gauteng",
     "Western Cape",
@@ -45,6 +47,8 @@ CIDB_GRADES = list(range(1, 10))
 CHECK_TYPES = ["CIPC", "CIDB"]
 
 DB_PATH = "subcontractors.db"
+
+SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-change-me")
 
 # What "Verified" is allowed to mean everywhere in this app: a specific check
 # against a specific source on a specific date, recorded with who did it -

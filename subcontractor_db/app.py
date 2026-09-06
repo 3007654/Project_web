@@ -5,7 +5,7 @@ from datetime import date, datetime
 from flask import Flask, render_template, request, redirect, url_for, abort, session
 
 import auth
-import subcontractor_config as config
+import config
 import db
 from verification import compute_verification, compute_profile_status
 
