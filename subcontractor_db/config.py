@@ -46,6 +46,11 @@ CIDB_GRADES = list(range(1, 10))
 # change.
 CHECK_TYPES = ["CIPC", "CIDB"]
 
+SOURCES_BY_CHECK_TYPE = {
+    "CIPC": ["CIPC eServices portal (eservices.cipc.co.za)"],
+    "CIDB": ["CIDB Register of Contractors (portal.cidb.org.za)"],
+}
+
 DB_PATH = "subcontractors.db"
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-change-me")
