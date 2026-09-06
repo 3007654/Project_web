@@ -1,4 +1,5 @@
 import os
+import tempfile
 import unittest
 from datetime import datetime, timezone
 
@@ -9,7 +10,7 @@ import db as db_module
 
 class SubcontractorAppTests(unittest.TestCase):
     def setUp(self):
-        self.db_path = "/tmp/test_subcontractors.db"
+        self.db_path = os.path.join(tempfile.gettempdir(), "test_subcontractors.db")
         if os.path.exists(self.db_path):
             os.remove(self.db_path)
         app_module.DB_PATH = self.db_path
@@ -18,8 +19,6 @@ class SubcontractorAppTests(unittest.TestCase):
         app_module.app.config["TESTING"] = True
         self.client = app_module.app.test_client()
 
-        # Create one verifier account directly (bypassing create_verifier.py's
-        # interactive prompts, which don't belong in an automated test).
         conn = self.get_conn()
         conn.execute(
             "INSERT INTO verifier_users (name, email, password_hash, role, active, created_at) "
@@ -48,6 +47,7 @@ class SubcontractorAppTests(unittest.TestCase):
             "trade": "Electrical",
             "province": "Gauteng",
             "years_active": "6",
+            "availability_status": "available",
             "ref1_client": "Balwin Properties",
             "ref1_comment": "Rewired 3 show units on time.",
         }
@@ -79,6 +79,17 @@ class SubcontractorAppTests(unittest.TestCase):
         self.assertNotIn(b"cipc_verified", resp.data)
         self.assertNotIn(b"cidb_verified", resp.data)
 
+    def test_nav_shows_login_link_when_logged_out_on_every_page(self):
+        for path in ("/", "/add"):
+            resp = self.client.get(path)
+            self.assertIn(b"Verifier login", resp.data)
+
+    def test_nav_shows_signed_in_name_after_login_on_every_page(self):
+        self.login()
+        for path in ("/", "/add"):
+            resp = self.client.get(path)
+            self.assertIn(b"Jane Verifier", resp.data)
+
     # --- submission always starts pending, and can't self-verify ---
 
     def test_submission_starts_as_pending_with_no_checks(self):
@@ -97,16 +108,97 @@ class SubcontractorAppTests(unittest.TestCase):
         conn.close()
 
     def test_add_form_ignores_any_verification_fields_even_if_submitted(self):
-        """Even if someone crafts a POST with old-style verification fields
-        (e.g. replaying an old form), the submission endpoint has no code
-        path that reads them - they're silently ignored, not honoured."""
         payload = self.valid_profile_payload(cipc_verified="on", cipc_checked_by="Anonymous")
         self.client.post("/add", data=payload)
-
         conn = self.get_conn()
         records = conn.execute("SELECT * FROM verification_records").fetchall()
         self.assertEqual(len(records), 0)
         conn.close()
+
+    # --- availability ---
+
+    def test_availability_status_required(self):
+        payload = self.valid_profile_payload(availability_status="")
+        resp = self.client.post("/add", data=payload)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"valid availability status", resp.data)
+
+    def test_engaged_status_saves_without_a_date(self):
+        payload = self.valid_profile_payload(availability_status="engaged")
+        resp = self.client.post("/add", data=payload, follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Currently engaged", resp.data)
+
+    def test_available_from_requires_a_future_date(self):
+        payload = self.valid_profile_payload(availability_status="available_from", availability_date="")
+        resp = self.client.post("/add", data=payload)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Availability date is required", resp.data)
+
+    def test_available_from_rejects_a_past_date(self):
+        payload = self.valid_profile_payload(availability_status="available_from", availability_date="2020-01-01")
+        resp = self.client.post("/add", data=payload)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"must be in the future", resp.data)
+
+    def test_available_from_accepts_a_future_date(self):
+        payload = self.valid_profile_payload(availability_status="available_from", availability_date="2027-01-01")
+        resp = self.client.post("/add", data=payload, follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Available from 2027-01-01", resp.data)
+
+    # --- capability: skills / equipment ---
+
+    def test_skills_and_equipment_saved_and_logged(self):
+        payload = self.valid_profile_payload(skills="LV reticulation, DB board wiring", equipment="cable puller, thermal camera")
+        self.client.post("/add", data=payload)
+
+        conn = self.get_conn()
+        skills = conn.execute("SELECT skill_name FROM subcontractor_skills WHERE subcontractor_id = 1").fetchall()
+        equipment = conn.execute("SELECT equipment_name FROM subcontractor_equipment WHERE subcontractor_id = 1").fetchall()
+        self.assertEqual([s["skill_name"] for s in skills], ["LV reticulation", "DB board wiring"])
+        self.assertEqual([e["equipment_name"] for e in equipment], ["cable puller", "thermal camera"])
+
+        events = conn.execute("SELECT event_type FROM audit_events WHERE subcontractor_id = 1").fetchall()
+        types = [e["event_type"] for e in events]
+        self.assertEqual(types.count("skill_added"), 2)
+        self.assertEqual(types.count("equipment_added"), 2)
+        conn.close()
+
+    def test_empty_skills_and_equipment_are_fine(self):
+        resp = self.client.post("/add", data=self.valid_profile_payload(), follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"None listed", resp.data)
+
+    # --- references with evidence ---
+
+    def test_reference_with_valid_evidence_url_saves(self):
+        payload = self.valid_profile_payload(
+            ref1_evidence_url="https://example.com/photo.jpg",
+            ref1_project_value="R450,000",
+        )
+        resp = self.client.post("/add", data=payload, follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"View evidence", resp.data)
+        self.assertIn(b"R450,000", resp.data)
+
+    def test_reference_with_invalid_evidence_url_rejected(self):
+        payload = self.valid_profile_payload(ref1_evidence_url="not-a-url")
+        resp = self.client.post("/add", data=payload)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"valid http(s) URL", resp.data)
+
+    def test_evidence_without_a_reference_is_rejected(self):
+        payload = self.valid_profile_payload(ref1_client="", ref1_comment="", ref1_evidence_url="https://example.com/x.jpg")
+        resp = self.client.post("/add", data=payload)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"needs a client name and comment", resp.data)
+
+    def test_lopsided_reference_rejected(self):
+        payload = self.valid_profile_payload(ref1_client="Some Client", ref1_comment="")
+        resp = self.client.post("/add", data=payload)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"has a client name but no comment", resp.data)
 
     # --- verification requires login ---
 
@@ -118,7 +210,7 @@ class SubcontractorAppTests(unittest.TestCase):
 
         conn = self.get_conn()
         records = conn.execute("SELECT * FROM verification_records").fetchall()
-        self.assertEqual(len(records), 0)  # nothing was recorded
+        self.assertEqual(len(records), 0)
         conn.close()
 
     def test_wrong_password_rejected(self):
@@ -141,13 +233,10 @@ class SubcontractorAppTests(unittest.TestCase):
         conn.close()
 
     def test_verified_by_comes_from_session_not_form(self):
-        """Even if a malicious form post tries to claim a different
-        verifier, the recorded verified_by_user_id must come from the
-        server-side session, not anything the client sent."""
         self.client.post("/add", data=self.valid_profile_payload())
         self.login()
         payload = self.valid_check_payload()
-        payload["verified_by_user_id"] = "9999"  # attempted spoof, should be ignored entirely
+        payload["verified_by_user_id"] = "9999"
         self.client.post("/subcontractor/1/verify", data=payload)
 
         conn = self.get_conn()
@@ -163,7 +252,7 @@ class SubcontractorAppTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/login", resp.headers["Location"])
 
-    # --- evidence requirements ---
+    # --- evidence requirements on verification records ---
 
     def test_reference_number_required_when_verified(self):
         self.client.post("/add", data=self.valid_profile_payload())
@@ -222,7 +311,6 @@ class SubcontractorAppTests(unittest.TestCase):
         self.client.post("/add", data=self.valid_profile_payload())
         self.login()
         self.client.post("/subcontractor/1/verify", data=self.valid_check_payload())
-
         conn = self.get_conn()
         p = conn.execute("SELECT * FROM subcontractor_profiles WHERE id = 1").fetchone()
         self.assertEqual(p["profile_status"], "verified")
@@ -233,25 +321,21 @@ class SubcontractorAppTests(unittest.TestCase):
         self.login()
         payload = self.valid_check_payload(outcome="not_verified", reference_number="", notes="Name mismatch on CIPC.")
         self.client.post("/subcontractor/1/verify", data=payload)
-
         conn = self.get_conn()
         p = conn.execute("SELECT * FROM subcontractor_profiles WHERE id = 1").fetchone()
         self.assertEqual(p["profile_status"], "not_verified")
         conn.close()
 
     def test_profile_status_needs_review_takes_priority(self):
-        """Even if CIPC comes back cleanly verified, a CIDB check flagged
-        needs_review should surface - not get hidden behind the good result."""
         self.client.post("/add", data=self.valid_profile_payload())
         self.login()
-        self.client.post("/subcontractor/1/verify", data=self.valid_check_payload())  # CIPC verified
+        self.client.post("/subcontractor/1/verify", data=self.valid_check_payload())
         cidb_payload = self.valid_check_payload(
             check_type="CIDB", outcome="needs_review", reference_number="",
             source="CIDB Register of Contractors (portal.cidb.org.za)",
             notes="Company name is close but not exact - could be a different entity.",
         )
         self.client.post("/subcontractor/1/verify", data=cidb_payload)
-
         conn = self.get_conn()
         p = conn.execute("SELECT * FROM subcontractor_profiles WHERE id = 1").fetchone()
         self.assertEqual(p["profile_status"], "needs_review")
@@ -277,13 +361,44 @@ class SubcontractorAppTests(unittest.TestCase):
         records = conn.execute(
             "SELECT * FROM verification_records WHERE subcontractor_id = 1 AND check_type = 'CIDB' ORDER BY id"
         ).fetchall()
-        self.assertEqual(len(records), 2)  # both kept, nothing overwritten
+        self.assertEqual(len(records), 2)
         self.assertEqual(records[0]["outcome"], "verified")
         self.assertEqual(records[1]["outcome"], "not_verified")
 
         p = conn.execute("SELECT * FROM subcontractor_profiles WHERE id = 1").fetchone()
-        self.assertEqual(p["profile_status"], "not_verified")  # latest CIDB, only check on file
+        self.assertEqual(p["profile_status"], "not_verified")
         conn.close()
+
+    # --- passport / freshness / explanations on the profile page ---
+
+    def test_passport_card_shows_availability_and_counts(self):
+        payload = self.valid_profile_payload(skills="LV reticulation", equipment="cable puller")
+        self.client.post("/add", data=payload)
+        resp = self.client.get("/subcontractor/1")
+        self.assertIn(b"Available now", resp.data)
+        self.assertIn(b"1 listed", resp.data)  # skills
+        self.assertIn(b"1 on file", resp.data)  # references
+
+    def test_why_this_status_shows_plain_language_explanation_after_check(self):
+        self.client.post("/add", data=self.valid_profile_payload())
+        self.login()
+        self.client.post("/subcontractor/1/verify", data=self.valid_check_payload())
+        resp = self.client.get("/subcontractor/1")
+        self.assertIn(b"came back verified against CIPC eServices portal", resp.data)
+        self.assertIn(b"Fresh", resp.data)
+
+    def test_stale_check_shows_stale_freshness_label(self):
+        self.client.post("/add", data=self.valid_profile_payload())
+        self.login()
+        old_check = self.valid_check_payload(checked_date="2025-01-01")
+        self.client.post("/subcontractor/1/verify", data=old_check)
+        resp = self.client.get("/subcontractor/1")
+        self.assertIn(b"Stale", resp.data)
+
+    def test_no_checks_shows_pending_explanation(self):
+        self.client.post("/add", data=self.valid_profile_payload())
+        resp = self.client.get("/subcontractor/1")
+        self.assertIn(b"awaiting its first verification", resp.data)
 
     # --- profile page + audit trail ---
 
@@ -291,7 +406,6 @@ class SubcontractorAppTests(unittest.TestCase):
         self.client.post("/add", data=self.valid_profile_payload())
         self.login()
         self.client.post("/subcontractor/1/verify", data=self.valid_check_payload())
-
         resp = self.client.get("/subcontractor/1")
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Jane Verifier", resp.data)

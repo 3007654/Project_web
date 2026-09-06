@@ -16,6 +16,10 @@
     .badge-Silver { background: #7a7a7a; }
     .badge-Bronze { background: #a15c2b; }
     .badge-Unverified { background: #b23b3b; }
+    .status-pending { background: #8a6d1a; }
+    .status-verified { background: #1a7f37; }
+    .status-not_verified { background: #9b2c2c; }
+    .status-needs_review { background: #b8860b; }
     .meta { color: #666; font-size: 14px; margin-top: 4px; }
     .score { font-size: 13px; color: #444; margin-left: 8px; }
     .disclaimer { background: #eef2f7; border: 1px solid #d7dee8; color: #3a4a5c; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px; }
@@ -41,6 +45,23 @@
     .audit-list { list-style: none; padding: 0; margin: 8px 0 0; }
     .audit-list li { padding: 6px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
     .audit-time { color: #888; font-family: monospace; margin-right: 8px; }
+
+    /* Passport card */
+    .passport { background: linear-gradient(135deg, #14213d, #1f3a63); color: #fff; }
+    .passport h1 { margin: 0 0 4px; }
+    .passport .meta { color: #cfd8e6; }
+    .passport-grid { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 14px; }
+    .passport-item { background: rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 14px; min-width: 160px; }
+    .passport-item .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #b9c4d6; }
+    .passport-item .value { font-size: 15px; font-weight: 600; margin-top: 2px; }
+
+    .freshness { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #fff; margin-left: 6px; }
+    .freshness-fresh { background: #1a7f37; }
+    .freshness-aging { background: #b8860b; }
+    .freshness-stale { background: #9b2c2c; }
+    .explanation { border-left: 3px solid #ddd; padding: 8px 12px; margin-top: 10px; font-size: 14px; }
+    .pill-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .pill { background: #eef2f7; border-radius: 999px; padding: 3px 11px; font-size: 13px; color: #3a4a5c; }
   </style>
 </head>
 <body>
@@ -49,6 +70,14 @@
     <nav>
       <a href="{{ url_for('index') }}">All Profiles</a>
       <a href="{{ url_for('add') }}">Add Subcontractor</a>
+      {% if verifier_name %}
+        <span style="margin-left:18px;">Signed in: <strong>{{ verifier_name }}</strong></span>
+        <form method="post" action="{{ url_for('logout') }}" style="display:inline;">
+          <button type="submit" style="background:none;border:none;color:#fff;text-decoration:underline;cursor:pointer;font-size:14px;margin-left:10px;">Log out</button>
+        </form>
+      {% else %}
+        <a href="{{ url_for('login') }}">Verifier login</a>
+      {% endif %}
     </nav>
   </header>
   <main>

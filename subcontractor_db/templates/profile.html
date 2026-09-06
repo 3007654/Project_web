@@ -12,10 +12,11 @@
     </div>
   {% endif %}
 
-  <div class="card">
+  <!-- Subcontractor Passport: the at-a-glance summary a contractor sees, no login needed -->
+  <div class="card passport">
     <div class="row">
       <div>
-        <h1 style="margin-bottom:2px;">{{ p.company_name }}</h1>
+        <h1>{{ p.company_name }}</h1>
         <div class="meta">{{ p.trade }} &middot; {{ p.province }} &middot; {{ p.years_active }} yr(s) active &middot; ID SC-{{ '%04d'|format(p.id) }}</div>
       </div>
       <div>
@@ -24,11 +25,69 @@
         <span class="score">{{ p.verification_score }}/100</span>
       </div>
     </div>
+    <div class="passport-grid">
+      <div class="passport-item">
+        <div class="label">Availability</div>
+        <div class="value">{{ availability }}</div>
+      </div>
+      <div class="passport-item">
+        <div class="label">Skills</div>
+        <div class="value">{{ skills|length }} listed</div>
+      </div>
+      <div class="passport-item">
+        <div class="label">Equipment</div>
+        <div class="value">{{ equipment|length }} listed</div>
+      </div>
+      <div class="passport-item">
+        <div class="label">References</div>
+        <div class="value">{{ references|length }} on file</div>
+      </div>
+      {% if explanations %}
+        <div class="passport-item">
+          <div class="label">Most recent check</div>
+          <div class="value">
+            {% set newest = explanations|sort(attribute='days')|first %}
+            {{ newest.days }} day{{ 's' if newest.days != 1 else '' }} ago
+            <span class="freshness freshness-{{ newest.css }}">{{ newest.label }}</span>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Why this status</h3>
+    {% if explanations %}
+      {% for e in explanations %}
+        <div class="explanation">
+          {{ e.sentence }}
+          <span class="freshness freshness-{{ e.css }}">{{ e.label }} &middot; {{ e.days }}d ago</span>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="meta">No checks recorded yet - this profile is awaiting its first verification.</p>
+    {% endif %}
   </div>
 
   <div class="card">
     <h3>Contact</h3>
     <p>{{ p.contact_name }}<br>{{ p.phone }}<br>{{ p.email }}</p>
+  </div>
+
+  <div class="card">
+    <h3>Capability</h3>
+    <p class="meta" style="margin-top:0;">Skills</p>
+    {% if skills %}
+      <div class="pill-list">{% for s in skills %}<span class="pill">{{ s.skill_name }}</span>{% endfor %}</div>
+    {% else %}
+      <p class="meta">None listed.</p>
+    {% endif %}
+    <p class="meta" style="margin-top:14px;">Equipment</p>
+    {% if equipment %}
+      <div class="pill-list">{% for eq in equipment %}<span class="pill">{{ eq.equipment_name }}</span>{% endfor %}</div>
+    {% else %}
+      <p class="meta">None listed.</p>
+    {% endif %}
   </div>
 
   <div class="card">
@@ -44,10 +103,10 @@
               {% elif r.outcome == 'needs_review' %}<span class="check-fail">Needs review</span>
               {% else %}<span class="check-fail">Not verified</span>{% endif %}
             </td>
-            <td>{{ r.reference_number or '—' }}</td>
-            <td>{{ r.grade or '—' }}</td>
+            <td>{{ r.reference_number or '\u2014' }}</td>
+            <td>{{ r.grade or '\u2014' }}</td>
             <td>{{ r.source }}</td>
-            <td>{{ r.notes or '—' }}</td>
+            <td>{{ r.notes or '\u2014' }}</td>
             <td>{{ r.checked_date }}</td>
             <td>{{ r.verifier_name }} ({{ r.verifier_role }})</td>
           </tr>
@@ -120,7 +179,11 @@
     {% if references %}
       <div class="refs">
         {% for ref in references %}
-          <div class="ref"><strong>{{ ref.client_name }}</strong><br>{{ ref.comment }}</div>
+          <div class="ref">
+            <strong>{{ ref.client_name }}</strong>{% if ref.project_value %} &middot; {{ ref.project_value }}{% endif %}<br>
+            {{ ref.comment }}
+            {% if ref.evidence_url %}<br><a href="{{ ref.evidence_url }}" target="_blank" rel="noopener">View evidence</a>{% endif %}
+          </div>
         {% endfor %}
       </div>
     {% else %}

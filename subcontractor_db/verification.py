@@ -1,5 +1,5 @@
 """
-Verification scoring and status - Phase 2 rebuild.
+Verification scoring and status.
 
 Two separate things are computed here, deliberately kept apart:
 
@@ -22,8 +22,8 @@ a viewer sees.
 VALID_OUTCOMES = ("verified", "not_verified", "needs_review")
 
 
-def compute_verification(cipc_outcome: str | None, cidb_outcome: str | None, cidb_grade,
-                          years_active: int, reference_count: int) -> tuple[int, str]:
+def compute_verification(cipc_outcome, cidb_outcome, cidb_grade,
+                          years_active: int, reference_count: int):
     """Only a 'verified' outcome contributes points - 'not_verified' and
     'needs_review' both count as zero for scoring purposes, though they're
     very different things (see compute_profile_status, which distinguishes
@@ -37,7 +37,7 @@ def compute_verification(cipc_outcome: str | None, cidb_outcome: str | None, cid
         score += 25
         score += min(cidb_grade or 0, 9) * 2  # up to +18
 
-    score += min(years_active or 0, 7) * 3   # up to +21, caps at 7+ years
+    score += min(years_active or 0, 7) * 3    # up to +21, caps at 7+ years
     score += min(reference_count or 0, 3) * 7  # up to +21, caps at 3+ references
 
     score = min(score, 100)
@@ -54,7 +54,7 @@ def compute_verification(cipc_outcome: str | None, cidb_outcome: str | None, cid
     return score, tier
 
 
-def compute_profile_status(cipc_outcome: str | None, cidb_outcome: str | None) -> str:
+def compute_profile_status(cipc_outcome, cidb_outcome) -> str:
     """
     - No checks recorded at all yet -> 'pending'
     - Either latest check is 'needs_review' -> 'needs_review' (this takes

@@ -1,5 +1,5 @@
 """
-Authentication for verifier accounts - Phase 2A of the rebuild.
+Authentication for verifier accounts.
 
 Uses werkzeug's password hashing (already a Flask dependency, no new
 package needed) and Flask's built-in session (signed cookie) rather than
@@ -22,12 +22,16 @@ def verify_password(plain: str, password_hash: str) -> bool:
     return check_password_hash(password_hash, plain)
 
 
-def current_user_id() -> int | None:
+def current_user_id():
     return session.get("verifier_id")
 
 
-def current_user_name() -> str | None:
+def current_user_name():
     return session.get("verifier_name")
+
+
+def current_user_role():
+    return session.get("verifier_role")
 
 
 def login_required(view_func):

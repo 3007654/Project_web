@@ -13,7 +13,7 @@
         <div class="row">
           <div>
             <a href="{{ url_for('profile', sub_id=p.id) }}"><strong>{{ p.company_name }}</strong></a>
-            <div class="meta">{{ p.trade }} &middot; {{ p.province }} &middot; {{ p.years_active }} yr(s) active</div>
+            <div class="meta">{{ p.trade }} &middot; {{ p.province }} &middot; {{ p.years_active }} yr(s) active &middot; {{ item.availability }}</div>
             <div class="meta">
               CIPC:
               {% if item.cipc and item.cipc.outcome == 'verified' %}

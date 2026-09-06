@@ -1,18 +1,23 @@
 """
-Database layer: SQLite, normalized around the model discussed for the
-platform's trust/audit layer -
+Database layer: SQLite.
+
+    verifier_users              (authorised checkers only - no self-registration)
 
     subcontractor_profiles
         |
-        +-- verification_records   (CIPC, CIDB, and any future check type)
-        +-- subcontractor_references
-        +-- audit_events           (a timestamped log of what happened, for whom)
+        +-- verification_records     (CIPC, CIDB, or a future check type;
+        |                              never overwritten - a re-check adds a
+        |                              new row, so history including a lapse
+        |                              stays intact)
+        +-- subcontractor_references  (with optional evidence link + value)
+        +-- subcontractor_skills
+        +-- subcontractor_equipment
+        +-- audit_events              (timestamped log: what happened, for whom)
 
-This is deliberately just the subcontractor-side slice of the bigger picture
-(tenders / awards / matches / contact_unlock come later) - narrow enough to
-build and test now, shaped so those tables slot in later without a rewrite:
-audit_events already has a generic subcontractor_id link and an event_type,
-so a future tender_id / match_id column is an additive change, not a redesign.
+Deliberately just the subcontractor-side slice of the bigger picture
+discussed (tenders / awards / matches / contact_unlock come later) - shaped
+so those attach later without a rewrite: audit_events already has a generic
+subcontractor_id link and a free-text event_type.
 """
 
 import sqlite3
@@ -41,9 +46,15 @@ CREATE TABLE IF NOT EXISTS subcontractor_profiles (
     trade               TEXT NOT NULL,
     province            TEXT NOT NULL,
     years_active        INTEGER NOT NULL,
+
+    -- 'available' | 'engaged' | 'available_from'
+    availability_status TEXT NOT NULL DEFAULT 'available',
+    availability_date   TEXT,   -- only set (and only meaningful) when status = 'available_from'
+
     tier                TEXT NOT NULL DEFAULT 'free',
     verification_score  INTEGER NOT NULL DEFAULT 0,
     verification_tier   TEXT NOT NULL DEFAULT 'Unverified',
+
     -- Workflow status, separate from the score/tier above:
     -- 'pending'      - submitted, no check has been performed yet
     -- 'verified'     - at least one check on file, none needing review,
@@ -51,19 +62,19 @@ CREATE TABLE IF NOT EXISTS subcontractor_profiles (
     -- 'not_verified' - every check on file came back negative
     -- 'needs_review' - the latest of some check came back ambiguous
     profile_status      TEXT NOT NULL DEFAULT 'pending',
+
     created_at          TEXT NOT NULL
 );
 
--- One row per check performed. Never overwritten - a re-check adds a new
--- row, so the history (including a check that later lapses) stays intact.
+-- One row per check performed. Never overwritten.
 CREATE TABLE IF NOT EXISTS verification_records (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     subcontractor_id    INTEGER NOT NULL REFERENCES subcontractor_profiles(id),
-    check_type          TEXT NOT NULL,   -- 'CIPC', 'CIDB', or a future check
-    outcome             TEXT NOT NULL,   -- 'verified' | 'not_verified' | 'needs_review'
+    check_type          TEXT NOT NULL,    -- 'CIPC', 'CIDB', or a future check
+    outcome             TEXT NOT NULL,    -- 'verified' | 'not_verified' | 'needs_review'
     reference_number    TEXT,             -- CIPC registration number / CIDB CRS number
     grade               INTEGER,          -- CIDB grade 1-9; NULL for other check types
-    source              TEXT NOT NULL,    -- e.g. "CIPC eServices portal"
+    source              TEXT NOT NULL,    -- e.g. "CIPC eServices portal (eservices.cipc.co.za)"
     notes               TEXT,             -- what the verifier actually observed
     checked_date        TEXT NOT NULL,
     verified_by_user_id INTEGER NOT NULL REFERENCES verifier_users(id),
@@ -75,6 +86,22 @@ CREATE TABLE IF NOT EXISTS subcontractor_references (
     subcontractor_id    INTEGER NOT NULL REFERENCES subcontractor_profiles(id),
     client_name         TEXT NOT NULL,
     comment             TEXT NOT NULL,
+    evidence_url         TEXT,             -- optional link to a photo/document hosted elsewhere
+    project_value        TEXT,             -- optional, free text (e.g. "R450,000")
+    created_at          TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS subcontractor_skills (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    subcontractor_id    INTEGER NOT NULL REFERENCES subcontractor_profiles(id),
+    skill_name          TEXT NOT NULL,
+    created_at          TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS subcontractor_equipment (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    subcontractor_id    INTEGER NOT NULL REFERENCES subcontractor_profiles(id),
+    equipment_name      TEXT NOT NULL,
     created_at          TEXT NOT NULL
 );
 
@@ -98,69 +125,8 @@ def connect(db_path):
 def init_db(db_path):
     conn = connect(db_path)
     conn.executescript(SCHEMA)
-    _migrate_existing_schema(conn)
     conn.commit()
     conn.close()
-
-
-def _migrate_existing_schema(conn):
-    """Add fields introduced after the first subcontractor schema release."""
-    profile_columns = {
-        row[1] for row in conn.execute("PRAGMA table_info(subcontractor_profiles)")
-    }
-    if "profile_status" not in profile_columns:
-        conn.execute(
-            "ALTER TABLE subcontractor_profiles ADD COLUMN "
-            "profile_status TEXT NOT NULL DEFAULT 'pending'"
-        )
-
-    record_columns = {
-        row[1] for row in conn.execute("PRAGMA table_info(verification_records)")
-    }
-    additions = {
-        "outcome": "TEXT NOT NULL DEFAULT 'not_verified'",
-        "reference_number": "TEXT",
-        "source": "TEXT NOT NULL DEFAULT 'Legacy record'",
-        "notes": "TEXT",
-        "verified_by_user_id": "INTEGER",
-    }
-    for column, definition in additions.items():
-        if column not in record_columns:
-            conn.execute(
-                f"ALTER TABLE verification_records ADD COLUMN {column} {definition}"
-            )
-
-    legacy_user = conn.execute(
-        "SELECT id FROM verifier_users WHERE email = ?",
-        ("legacy-import@local.invalid",),
-    ).fetchone()
-    if legacy_user is None:
-        cursor = conn.execute(
-            "INSERT INTO verifier_users "
-            "(name, email, password_hash, role, active, created_at) "
-            "VALUES (?, ?, ?, 'VERIFIER', 0, ?)",
-            (
-                "Legacy import",
-                "legacy-import@local.invalid",
-                "!legacy-import-not-a-login",
-                now_iso(),
-            ),
-        )
-        legacy_user_id = cursor.lastrowid
-    else:
-        legacy_user_id = legacy_user[0]
-
-    if "verified" in record_columns:
-        conn.execute(
-            "UPDATE verification_records SET outcome = CASE "
-            "WHEN verified = 1 THEN 'verified' ELSE 'not_verified' END "
-            "WHERE outcome = 'not_verified'"
-        )
-    conn.execute(
-        "UPDATE verification_records SET verified_by_user_id = ? "
-        "WHERE verified_by_user_id IS NULL",
-        (legacy_user_id,),
-    )
 
 
 def now_iso():

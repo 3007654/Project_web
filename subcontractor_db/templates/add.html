@@ -3,9 +3,9 @@
 {% block content %}
   <h1>Add Subcontractor</h1>
   <p class="meta">
-    This submits company details only. A subcontractor can never mark themselves
-    verified - the profile starts as <strong>Verification Pending</strong> and only
-    an authorised, logged-in verifier can record a check (from the profile page).
+    This submission starts as <strong>Verification Pending</strong>. There's no way to
+    mark a company verified from this form - only a logged-in verifier can record a check,
+    from the profile page, after this is submitted.
   </p>
 
   {% if errors %}
@@ -52,15 +52,44 @@
     </fieldset>
 
     <fieldset>
+      <legend>Availability</legend>
+      <label for="availability_status">Current availability</label>
+      <select id="availability_status" name="availability_status">
+        <option value="">Select&hellip;</option>
+        {% for value, label in availability_statuses %}
+          <option value="{{ value }}" {% if form.get('availability_status') == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="availability_date">If "Available from a future date" - which date?</label>
+      <input type="date" id="availability_date" name="availability_date" min="{{ today }}" value="{{ form.get('availability_date', '') }}">
+    </fieldset>
+
+    <fieldset>
+      <legend>Capability</legend>
+      <label for="skills">Skills (comma-separated)</label>
+      <input type="text" id="skills" name="skills" placeholder="e.g. LV reticulation, DB board wiring, solar PV install" value="{{ form.get('skills', '') }}">
+
+      <label for="equipment">Equipment (comma-separated)</label>
+      <input type="text" id="equipment" name="equipment" placeholder="e.g. cable puller, thermal camera, MEWP" value="{{ form.get('equipment', '') }}">
+    </fieldset>
+
+    <fieldset>
       <legend>Site References (optional, up to 3)</legend>
       {% for i in (1, 2, 3) %}
-        <label for="ref{{ i }}_client">Reference {{ i }} &mdash; client name</label>
-        <input type="text" id="ref{{ i }}_client" name="ref{{ i }}_client" value="{{ form.get('ref' ~ i ~ '_client', '') }}">
-        <label for="ref{{ i }}_comment">Reference {{ i }} &mdash; comment</label>
-        <textarea id="ref{{ i }}_comment" name="ref{{ i }}_comment" rows="2">{{ form.get('ref' ~ i ~ '_comment', '') }}</textarea>
+        <div style="margin-top:{% if i > 1 %}18px{% else %}0{% endif %}; padding-top:{% if i > 1 %}14px{% else %}0{% endif %}; border-top:{% if i > 1 %}1px dashed #ddd{% else %}none{% endif %};">
+          <label for="ref{{ i }}_client">Reference {{ i }} &mdash; client name</label>
+          <input type="text" id="ref{{ i }}_client" name="ref{{ i }}_client" value="{{ form.get('ref' ~ i ~ '_client', '') }}">
+          <label for="ref{{ i }}_comment">Reference {{ i }} &mdash; comment</label>
+          <textarea id="ref{{ i }}_comment" name="ref{{ i }}_comment" rows="2">{{ form.get('ref' ~ i ~ '_comment', '') }}</textarea>
+          <label for="ref{{ i }}_evidence_url">Reference {{ i }} &mdash; evidence link (optional, e.g. a photo or document hosted online)</label>
+          <input type="text" id="ref{{ i }}_evidence_url" name="ref{{ i }}_evidence_url" placeholder="https://..." value="{{ form.get('ref' ~ i ~ '_evidence_url', '') }}">
+          <label for="ref{{ i }}_project_value">Reference {{ i }} &mdash; project value (optional)</label>
+          <input type="text" id="ref{{ i }}_project_value" name="ref{{ i }}_project_value" placeholder="e.g. R450,000" value="{{ form.get('ref' ~ i ~ '_project_value', '') }}">
+        </div>
       {% endfor %}
     </fieldset>
 
-    <button class="btn" type="submit">Submit Subcontractor</button>
+    <button class="btn" type="submit">Save Subcontractor</button>
   </form>
 {% endblock %}

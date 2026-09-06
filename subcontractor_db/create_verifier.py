@@ -7,7 +7,7 @@ Run this once to create your first ADMIN account, and again for each
 person who'll actually be doing CIPC/CIDB checks.
 
 Usage:
-    python3 create_verifier.py
+    python create_verifier.py
 """
 
 import getpass
@@ -16,6 +16,7 @@ import sqlite3
 from datetime import datetime, timezone
 
 import db
+import auth
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "subcontractors.db")
 
@@ -40,7 +41,6 @@ def main():
         print("Password should be at least 8 characters - nothing created.")
         return
 
-    import auth  # local import so this file works even if auth.py is added later
     password_hash = auth.hash_password(password)
 
     conn = db.connect(DB_PATH)
